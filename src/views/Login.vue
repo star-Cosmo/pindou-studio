@@ -17,10 +17,6 @@
         <button type="submit" class="btn-primary btn-full" :disabled="auth.loading">
           {{ auth.loading ? '登录中...' : '登录' }}
         </button>
-        <!-- 快速登录测试账号 -->
-        <button type="button" class="btn-quick btn-full" :disabled="auth.loading" @click="quickLogin">
-          🧪 快速登录测试账号
-        </button>
       </form>
 
       <p class="auth-footer">
@@ -41,25 +37,14 @@ const email = ref('')
 const password = ref('')
 const errorMsg = ref('')
 
-// 统一登录逻辑，failureMsg 与 successRoute 用于定制快速登录场景
-async function handleLogin(opts?: { failureMsg?: string; successRoute?: string }) {
+async function handleLogin() {
   errorMsg.value = ''
   const error = await auth.signIn(email.value, password.value)
   if (error) {
-    errorMsg.value = opts?.failureMsg ?? error.message
+    errorMsg.value = error.message
   } else {
-    router.push(opts?.successRoute ?? '/')
+    router.push('/')
   }
-}
-
-// 快速登录测试账号：自动填入凭据并触发登录
-async function quickLogin() {
-  email.value = '1074245166@qq.com'
-  password.value = 'chen1234'
-  await handleLogin({
-    failureMsg: '测试账号未创建，请先在注册页注册该账号一次',
-    successRoute: '/history'
-  })
 }
 </script>
 
@@ -95,15 +80,6 @@ async function quickLogin() {
 .btn-full { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; }
 .btn-primary { background: linear-gradient(135deg, #7c4dff, #651fff); color: #fff; font-weight: 600; }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-quick {
-  background: #fff;
-  border: 1px dashed #bbb;
-  color: #666;
-  font-weight: 500;
-  transition: border-color 0.2s, color 0.2s;
-}
-.btn-quick:hover:not(:disabled) { border-color: #7c4dff; color: #7c4dff; }
-.btn-quick:disabled { opacity: 0.6; cursor: not-allowed; }
 .auth-footer { text-align: center; color: #888; font-size: 14px; margin-top: 24px; }
 .auth-footer a { color: #7c4dff; text-decoration: none; font-weight: 500; }
 </style>
