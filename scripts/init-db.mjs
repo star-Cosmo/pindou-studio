@@ -48,6 +48,18 @@ async function main() {
     `)
     console.log('✅ likes 表创建成功')
 
+    // 创建 profiles 表
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS profiles (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        user_id UUID NOT NULL UNIQUE,
+        email TEXT,
+        is_admin BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `)
+    console.log('✅ profiles 表创建成功')
+
     // 创建 increment_likes 函数
     await client.query(`
       CREATE OR REPLACE FUNCTION increment_likes(pattern_id UUID)
@@ -86,6 +98,7 @@ async function main() {
     await client.query(`
       ALTER TABLE patterns ENABLE ROW LEVEL SECURITY;
       ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
     `)
     console.log('✅ RLS 已启用')
 
@@ -107,6 +120,24 @@ async function main() {
     `)
     console.log('✅ patterns RLS 策略已创建')
 
+    // 为 patterns 添加管理员策略
+    await client.query(`
+      DROP POLICY IF EXISTS "Admins can view all patterns" ON patterns;
+      CREATE POLICY "Admins can view all patterns" ON patterns
+        FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true));
+    `)
+    await client.query(`
+      DROP POLICY IF EXISTS "Admins can delete any pattern" ON patterns;
+      CREATE POLICY "Admins can delete any pattern" ON patterns
+        FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true));
+    `)
+    await client.query(`
+      DROP POLICY IF EXISTS "Admins can update any pattern" ON patterns;
+      CREATE POLICY "Admins can update any pattern" ON patterns
+        FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true));
+    `)
+    console.log('✅ patterns 管理员策略已创建')
+
     // 为 likes 添加策略
     await client.query(`
       DROP POLICY IF EXISTS "Users can insert their own likes" ON likes;
@@ -124,6 +155,53 @@ async function main() {
         FOR SELECT USING (true);
     `)
     console.log('✅ likes RLS 策略已创建')
+
+    // 为 profiles 添加策略
+    await client.query(`
+      DROP POLICY IF EXISTS "Users can view profiles" ON profiles;
+      CREATE POLICY "Users can view profiles" ON profiles
+        FOR SELECT USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true));
+    `)
+    await client.query(`
+      DROP POLICY IF EXISTS "Users can insert their own profiles" ON profiles;
+      CREATE POLICY "Users can insert their own profiles" ON profiles
+        FOR INSERT WITH CHECK (auth.uid() = user_id);
+    `)
+    await client.query(`
+      DROP POLICY IF EXISTS "Users can update their own profiles" ON profiles;
+      CREATE POLICY "Users can update their own profiles" ON profiles
+        FOR UPDATE USING (auth.uid() = user_id OR EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true));
+    `)
+    console.log('✅ profiles RLS 策略已创建')
+
+    // 为 profiles 添加列级保护触发器，防止普通用户自行修改 is_admin 提权
+    await client.query(`
+      CREATE OR REPLACE FUNCTION protect_is_admin()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        -- 仅当 is_admin 字段发生变更时检查
+        IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+          -- 当前用户不是管理员则拒绝
+          IF NOT EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND is_admin = true) THEN
+            RAISE EXCEPTION '只有管理员可以修改 is_admin 字段';
+          END IF;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `)
+    await client.query(`
+      DROP TRIGGER IF EXISTS trg_protect_is_admin ON profiles;
+      CREATE TRIGGER trg_protect_is_admin
+        BEFORE UPDATE OF is_admin ON profiles
+        FOR EACH ROW
+        EXECUTE FUNCTION protect_is_admin();
+    `)
+    console.log('✅ profiles is_admin 列级保护触发器已创建')
+
+    console.log('\n📋 一次性操作：为测试账号设置管理员权限')
+    console.log('在 Supabase Dashboard SQL Editor 执行：')
+    console.log("UPDATE profiles SET is_admin = true WHERE email = '1074245166@qq.com';")
 
     console.log('\n🎉 数据库初始化完成！')
   } catch (err) {

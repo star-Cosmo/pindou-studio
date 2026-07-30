@@ -70,5 +70,35 @@ export const usePatternStore = defineStore('patterns', () => {
     }
   }
 
-  return { patterns, loading, fetchMyPatterns, fetchPublicPatterns, savePattern, toggleLike }
+  async function deletePattern(patternId: string) {
+    const { error } = await supabase.from('patterns').delete().eq('id', patternId)
+    if (!error) {
+      patterns.value = patterns.value.filter((p) => p.id !== patternId)
+    }
+    return { error }
+  }
+
+  async function updatePatternVisibility(patternId: string, isPublic: boolean) {
+    const { error } = await supabase
+      .from('patterns')
+      .update({ is_public: isPublic })
+      .eq('id', patternId)
+    if (!error) {
+      patterns.value = patterns.value.map((p) =>
+        p.id === patternId ? { ...p, is_public: isPublic } : p,
+      )
+    }
+    return { error }
+  }
+
+  return {
+    patterns,
+    loading,
+    fetchMyPatterns,
+    fetchPublicPatterns,
+    savePattern,
+    toggleLike,
+    deletePattern,
+    updatePatternVisibility,
+  }
 })

@@ -33,6 +33,7 @@
       </div>
 
       <div class="profile-actions">
+        <router-link v-if="auth.isAdmin" to="/admin" class="btn-outline btn-admin">⚙️ 进入管理后台</router-link>
         <router-link to="/history" class="btn-outline">📂 查看我的图纸</router-link>
         <button class="btn-outline btn-danger" @click="handleLogout">退出登录</button>
       </div>
@@ -91,4 +92,6 @@ async function handleLogout() {
 .btn-outline:hover { background: #f5f0ff; }
 .btn-danger { border-color: #e53935; color: #e53935; }
 .btn-danger:hover { background: #fff0f0; }
+.btn-admin { border-color: #b8860b; color: #b8860b; }
+.btn-admin:hover { background: #fff8e7; }
 </style>

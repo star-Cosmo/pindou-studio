@@ -7,13 +7,44 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const session = ref<Session | null>(null)
   const loading = ref(false)
+  const isAdmin = ref(false)
 
   const isLoggedIn = computed(() => !!user.value)
+
+  async function loadProfile() {
+    if (!user.value) return
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('user_id', user.value.id)
+        .single()
+
+      if (data) {
+        isAdmin.value = data.is_admin
+      } else {
+        // 无记录，插入一条新 profile（is_admin 默认 false）
+        await supabase.from('profiles').insert({
+          user_id: user.value.id,
+          email: user.value.email,
+          is_admin: false,
+        })
+        isAdmin.value = false
+      }
+    } catch {
+      // 查询失败时保持 isAdmin=false，不抛异常
+      isAdmin.value = false
+    }
+  }
 
   async function initialize() {
     const { data } = await supabase.auth.getSession()
     session.value = data.session
     user.value = data.session?.user ?? null
+
+    if (user.value) {
+      await loadProfile()
+    }
 
     supabase.auth.onAuthStateChange((_event, newSession) => {
       session.value = newSession
@@ -31,6 +62,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function signIn(email: string, password: string) {
     loading.value = true
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) {
+      await loadProfile()
+    }
     loading.value = false
     return error
   }
@@ -39,7 +73,8 @@ export const useAuthStore = defineStore('auth', () => {
     await supabase.auth.signOut()
     user.value = null
     session.value = null
+    isAdmin.value = false
   }
 
-  return { user, session, loading, isLoggedIn, initialize, signUp, signIn, signOut }
+  return { user, session, loading, isLoggedIn, isAdmin, initialize, signUp, signIn, signOut, loadProfile }
 })
