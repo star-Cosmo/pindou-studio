@@ -52,8 +52,7 @@ async function handleRegister() {
   if (error) {
     errorMsg.value = error.message
   } else {
-    alert('注册成功！请查看邮箱确认链接（如果已开启邮箱验证），或直接登录。')
-    router.push('/login')
+    router.push('/register-success')
   }
 }
 </script>
