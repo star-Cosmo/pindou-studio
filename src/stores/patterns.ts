@@ -13,6 +13,7 @@ export interface BeadPattern {
   is_public: boolean
   likes_count: number
   grid_data: string | null
+  author_username?: string | null
 }
 
 export const usePatternStore = defineStore('patterns', () => {
@@ -37,7 +38,27 @@ export const usePatternStore = defineStore('patterns', () => {
       .select('*')
       .eq('is_public', true)
       .order('created_at', { ascending: false })
-    if (data) patterns.value = data
+
+    if (data) {
+      // 获取所有作者的用户名
+      const userIds = [...new Set(data.map(p => p.user_id).filter(Boolean))]
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, username')
+        .in('user_id', userIds)
+
+      const usernameMap = new Map<string, string | null>()
+      if (profiles) {
+        for (const p of profiles) {
+          usernameMap.set(p.user_id, p.username ?? null)
+        }
+      }
+
+      patterns.value = data.map(p => ({
+        ...p,
+        author_username: usernameMap.get(p.user_id) ?? null,
+      }))
+    }
     loading.value = false
   }
 
