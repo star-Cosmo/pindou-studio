@@ -5,7 +5,7 @@
       <router-view />
     </main>
     <footer class="app-footer">
-      <p>拼豆工坊 &copy; 2026 &mdash; 用创意点亮每一颗豆</p>
+      <p>拼豆工坊 v{{ version }} &copy; 2026 &mdash; 用创意点亮每一颗豆</p>
     </footer>
   </div>
 </template>
@@ -14,6 +14,7 @@
 import { onMounted } from 'vue'
 import NavBar from './components/NavBar.vue'
 import { useAuthStore } from './stores/auth'
+import { version } from '../package.json'
 
 const auth = useAuthStore()
 
