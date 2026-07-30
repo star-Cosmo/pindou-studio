@@ -32,9 +32,13 @@ jobs:
           cache: npm
 
       - name: 安装依赖
-        # 使用 npm install 而非 npm ci：规避 npm/cli#4828 关于 optionalDependencies 的 bug
-        # rolldown（Vite 8 底层）使用平台原生绑定，npm ci 不会为目标平台补装可选依赖
-        run: npm install --no-audit --no-fund
+        # 规避 npm/cli#4828 关于 optionalDependencies 的 bug
+        # rolldown（Vite 8 底层）使用平台原生绑定，Windows 上生成的 lock 文件
+        # 不含 Linux 绑定条目，npm ci / npm install 都无法补装。
+        # 删除 lock 文件后让 npm 在 Linux 环境重新解析依赖。
+        run: |
+          rm package-lock.json
+          npm install --no-audit --no-fund
 
       - name: 创建 .env 文件
         run: |
