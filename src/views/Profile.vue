@@ -34,6 +34,26 @@
         </div>
       </div>
 
+      <!-- 修改用户名 -->
+      <div class="section-card">
+        <h3 class="section-title">修改用户名</h3>
+        <form @submit.prevent="handleChangeUsername" class="password-form">
+          <div class="form-group">
+            <label>当前用户名</label>
+            <input :value="currentUsername" type="text" disabled class="input-disabled" />
+          </div>
+          <div class="form-group">
+            <label>新用户名</label>
+            <input v-model="usernameForm.newUsername" type="text" placeholder="输入新用户名" required minlength="2" />
+          </div>
+          <p v-if="usernameForm.error" class="form-error">{{ usernameForm.error }}</p>
+          <p v-if="usernameForm.success" class="form-success">{{ usernameForm.success }}</p>
+          <button type="submit" class="btn-primary" :disabled="usernameForm.loading">
+            {{ usernameForm.loading ? '保存中...' : '保存用户名' }}
+          </button>
+        </form>
+      </div>
+
       <!-- 修改密码 -->
       <div class="section-card">
         <h3 class="section-title">修改密码</h3>
@@ -76,6 +96,14 @@ const patternStore = usePatternStore()
 const router = useRouter()
 const patternCount = ref(0)
 
+const currentUsername = ref('')
+const usernameForm = reactive({
+  newUsername: '',
+  loading: false,
+  error: '',
+  success: '',
+})
+
 const passwordForm = reactive({
   newPassword: '',
   confirmPassword: '',
@@ -88,11 +116,48 @@ onMounted(async () => {
   if (auth.isLoggedIn && auth.user) {
     await patternStore.fetchMyPatterns(auth.user.id)
     patternCount.value = patternStore.patterns.length
+
+    // 获取当前用户名
+    const { data } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('user_id', auth.user.id)
+      .single()
+    if (data?.username) {
+      currentUsername.value = data.username
+    }
   }
 })
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('zh-CN')
+}
+
+async function handleChangeUsername() {
+  usernameForm.error = ''
+  usernameForm.success = ''
+
+  if (usernameForm.newUsername.length < 2) {
+    usernameForm.error = '用户名至少 2 个字符'
+    return
+  }
+
+  usernameForm.loading = true
+  const { error } = await supabase
+    .from('profiles')
+    .update({ username: usernameForm.newUsername })
+    .eq('user_id', auth.user!.id)
+  usernameForm.loading = false
+
+  if (error) {
+    usernameForm.error = error.message
+    return
+  }
+
+  currentUsername.value = usernameForm.newUsername
+  usernameForm.success = '用户名修改成功'
+  usernameForm.newUsername = ''
+  setTimeout(() => { usernameForm.success = '' }, 3000)
 }
 
 async function handleChangePassword() {
@@ -157,6 +222,7 @@ async function handleLogout() {
 .form-group label { display: block; font-size: 13px; font-weight: 500; color: #555; margin-bottom: 6px; }
 .form-group input { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
 .form-group input:focus { outline: none; border-color: #7c4dff; }
+.input-disabled { background: #f5f5f5; color: #999; cursor: not-allowed; }
 .form-error { color: #e53935; font-size: 13px; margin: 6px 0; }
 .form-success { color: #2e8b57; font-size: 13px; margin: 6px 0; }
 
