@@ -32,7 +32,9 @@ jobs:
           cache: npm
 
       - name: 安装依赖
-        run: npm ci
+        # 使用 npm install 而非 npm ci：规避 npm/cli#4828 关于 optionalDependencies 的 bug
+        # rolldown（Vite 8 底层）使用平台原生绑定，npm ci 不会为目标平台补装可选依赖
+        run: npm install --no-audit --no-fund
 
       - name: 创建 .env 文件
         run: |
