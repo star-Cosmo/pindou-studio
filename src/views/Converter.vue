@@ -507,6 +507,9 @@ function downloadImage() {
 async function saveToHistory() {
   if (!auth.isLoggedIn || !auth.user) return
 
+  const { supabase } = await import('../lib/supabase')
+
+  // 生成缩略图 canvas
   const canvas = document.createElement('canvas')
   const cellSize = 4
   const size = Math.max(gridWidth.value, gridHeight.value) * cellSize
@@ -523,27 +526,57 @@ async function saveToHistory() {
     }
   }
 
+  // 尝试上传缩略图到 Supabase Storage
   const blob = await new Promise<Blob>(resolve => canvas.toBlob(b => resolve(b!), 'image/png'))
-
   const fileName = `thumbnails/${auth.user!.id}/${Date.now()}.png`
-  const { data: uploadData } = await (await import('../lib/supabase')).supabase.storage
+  const { data: uploadData, error: uploadError } = await supabase.storage
     .from('pattern-images')
-    .upload(fileName, blob)
+    .upload(fileName, blob, { upsert: true })
 
-  const thumbnailUrl = uploadData?.path
-    ? (await (await import('../lib/supabase')).supabase.storage.from('pattern-images').getPublicUrl(uploadData.path)).data.publicUrl
-    : null
+  let thumbnailUrl: string | undefined
 
-  await patternStore.savePattern({
+  if (uploadError) {
+    console.warn('缩略图上传失败，使用 data URL 后备', uploadError.message)
+    // 后备：生成较小的 data URL 缩略图（60x60）
+    const thumbSize = 60
+    const thumbCanvas = document.createElement('canvas')
+    thumbCanvas.width = thumbSize
+    thumbCanvas.height = thumbSize
+    const thumbCtx = thumbCanvas.getContext('2d')!
+    const sx = gridWidth.value / thumbSize
+    const sy = gridHeight.value / thumbSize
+    for (let y = 0; y < thumbSize; y++) {
+      for (let x = 0; x < thumbSize; x++) {
+        const srcX = Math.min(Math.floor(x * sx), gridWidth.value - 1)
+        const srcY = Math.min(Math.floor(y * sy), gridHeight.value - 1)
+        thumbCtx.fillStyle = grid.value[srcY][srcX].hex
+        thumbCtx.fillRect(x, y, 1, 1)
+      }
+    }
+    thumbnailUrl = thumbCanvas.toDataURL('image/png')
+  } else {
+    thumbnailUrl = uploadData?.path
+      ? supabase.storage.from('pattern-images').getPublicUrl(uploadData.path).data.publicUrl
+      : undefined
+  }
+
+  const gridData = JSON.stringify(grid.value.map(row => row.map(cell => cell.code)))
+
+  const { error: saveError } = await patternStore.savePattern({
     user_id: auth.user!.id,
     title: `拼豆图纸 ${gridWidth.value}×${gridHeight.value}`,
     grid_width: gridWidth.value,
     grid_height: gridHeight.value,
-    thumbnail_url: thumbnailUrl || undefined,
+    thumbnail_url: thumbnailUrl,
     is_public: false,
+    grid_data: gridData,
   })
 
-  alert('✅ 已保存到「我的图纸」！')
+  if (saveError) {
+    alert('保存失败: ' + saveError.message)
+  } else {
+    alert('已保存到「我的图纸」！')
+  }
 }
 </script>
 

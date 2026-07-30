@@ -12,6 +12,7 @@ export interface BeadPattern {
   thumbnail_url: string | null
   is_public: boolean
   likes_count: number
+  grid_data: string | null
 }
 
 export const usePatternStore = defineStore('patterns', () => {
@@ -47,6 +48,7 @@ export const usePatternStore = defineStore('patterns', () => {
     grid_height: number
     thumbnail_url?: string
     is_public: boolean
+    grid_data?: string
   }) {
     const { data, error } = await supabase.from('patterns').insert(pattern).select().single()
     return { data, error }

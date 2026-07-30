@@ -22,9 +22,9 @@
     <div v-else class="patterns-grid">
       <div v-for="p in patterns" :key="p.id" class="pattern-card" @click="openPreview(p)">
         <div class="pattern-thumb">
-          <img v-if="p.thumbnail_url" :src="p.thumbnail_url" :alt="p.title" />
+          <img v-if="p.thumbnail_url && !brokenImgs[p.id]" :src="p.thumbnail_url" :alt="p.title" @error="onImgError(p.id)" />
           <div v-else class="thumb-placeholder">{{ p.grid_width }}×{{ p.grid_height }}</div>
-          <span v-if="p.is_public" class="badge-public">🌍 已发布</span>
+          <span v-if="p.is_public" class="badge-public">已发布</span>
         </div>
         <div class="pattern-info">
           <h3>{{ p.title }}</h3>
@@ -43,7 +43,7 @@
         <button class="modal-close" aria-label="关闭" @click="closePreview">×</button>
 
         <div class="modal-thumb">
-          <img v-if="selectedPattern.thumbnail_url" :src="selectedPattern.thumbnail_url" :alt="selectedPattern.title" />
+          <img v-if="selectedPattern.thumbnail_url && !brokenImgs[selectedPattern.id]" :src="selectedPattern.thumbnail_url" :alt="selectedPattern.title" @error="onImgError(selectedPattern.id)" />
           <div v-else class="thumb-placeholder-large">
             {{ selectedPattern.grid_width }}×{{ selectedPattern.grid_height }}
           </div>
@@ -70,12 +70,20 @@
             @click="togglePublic"
           >
             <span v-if="actionLoading">处理中...</span>
-            <span v-else-if="selectedPattern.is_public">🔒 取消发布</span>
-            <span v-else>🌍 发布到社区</span>
+            <span v-else-if="selectedPattern.is_public">取消发布</span>
+            <span v-else>发布到社区</span>
+          </button>
+
+          <button
+            class="btn-primary"
+            :disabled="actionLoading || !selectedPattern.grid_data"
+            @click="downloadFromHistory"
+          >
+            下载图纸
           </button>
 
           <button class="btn-danger" :disabled="actionLoading" @click="deleteCurrent">
-            🗑️ 删除图纸
+            删除图纸
           </button>
         </div>
       </div>
@@ -88,6 +96,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { usePatternStore } from '../stores/patterns'
 import type { BeadPattern } from '../stores/patterns'
+import { beadPalette } from '../lib/beadColors'
 
 const auth = useAuthStore()
 const patternStore = usePatternStore()
@@ -98,6 +107,11 @@ const loading = ref(true)
 const selectedPattern = ref<BeadPattern | null>(null)
 const actionLoading = ref(false)
 const actionError = ref('')
+const brokenImgs = ref<Record<string, boolean>>({})
+
+function onImgError(id: string) {
+  brokenImgs.value[id] = true
+}
 
 function openPreview(p: BeadPattern) {
   actionError.value = ''
@@ -156,6 +170,69 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
 })
+
+function isLightColor(rgb: [number, number, number]): boolean {
+  return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) > 140
+}
+
+/** 从 grid_data 重建图纸 PNG 并下载 */
+function downloadFromHistory() {
+  const pattern = selectedPattern.value
+  if (!pattern || !pattern.grid_data) return
+
+  try {
+    const gridCodes: string[][] = JSON.parse(pattern.grid_data)
+    const rows = gridCodes.length
+    const cols = gridCodes[0].length
+    const cellSize = 28
+    const padding = 20
+
+    // 将颜色编码映射为 BeadColor
+    const colorMap = new Map(beadPalette.map(c => [c.code, c]))
+    const grid = gridCodes.map(row =>
+      row.map(code => colorMap.get(code) ?? { code, hex: '#ccc', rgb: [200, 200, 200] as [number, number, number], name: 'unknown' })
+    )
+
+    const canvas = document.createElement('canvas')
+    canvas.width = cols * cellSize + padding * 2
+    canvas.height = rows * cellSize + padding * 2
+    const ctx = canvas.getContext('2d')!
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    const beadR = cellSize * 0.42
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const color = grid[y][x]
+        const cx = padding + x * cellSize + cellSize / 2
+        const cy = padding + y * cellSize + cellSize / 2
+
+        ctx.beginPath()
+        ctx.arc(cx, cy, beadR, 0, Math.PI * 2)
+        ctx.fillStyle = color.hex
+        ctx.fill()
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)'
+        ctx.lineWidth = 0.5
+        ctx.stroke()
+
+        ctx.fillStyle = isLightColor(color.rgb) ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)'
+        ctx.font = 'bold 8px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(color.code, cx, cy)
+      }
+    }
+
+    const link = document.createElement('a')
+    link.download = `拼豆图纸_${cols}x${rows}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  } catch (e) {
+    actionError.value = '图纸数据异常，无法下载'
+  }
+}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('zh-CN')

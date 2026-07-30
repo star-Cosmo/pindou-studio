@@ -16,10 +16,10 @@
 
     <div v-else class="gallery-grid">
       <div v-for="p in patterns" :key="p.id" class="gallery-card">
-        <div class="gallery-thumb">
-          <img v-if="p.thumbnail_url" :src="p.thumbnail_url" :alt="p.title" />
-          <div v-else class="thumb-placeholder">{{ p.grid_width }}×{{ p.grid_height }}</div>
-        </div>
+            <div class="gallery-thumb">
+              <img v-if="p.thumbnail_url && !brokenImgs[p.id]" :src="p.thumbnail_url" :alt="p.title" @error="onImgError(p.id)" />
+              <div v-else class="thumb-placeholder">{{ p.grid_width }}×{{ p.grid_height }}</div>
+            </div>
         <div class="gallery-info">
           <h3>{{ p.title }}</h3>
           <div class="gallery-meta">
@@ -48,12 +48,18 @@
 import { onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { usePatternStore } from '../stores/patterns'
+import type { BeadPattern } from '../stores/patterns'
 
 const auth = useAuthStore()
 const patternStore = usePatternStore()
-const patterns = ref(patternStore.patterns)
+const patterns = ref<BeadPattern[]>([])
 const loading = ref(true)
 const likedMap = ref<Record<string, boolean>>({})
+const brokenImgs = ref<Record<string, boolean>>({})
+
+function onImgError(id: string) {
+  brokenImgs.value[id] = true
+}
 
 onMounted(async () => {
   await patternStore.fetchPublicPatterns()

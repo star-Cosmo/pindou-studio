@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { supabase } from '../lib/supabase'
+import { supabase, getAdminClient } from '../lib/supabase'
 
 export interface AdminProfile {
   id: string
@@ -8,6 +8,9 @@ export interface AdminProfile {
   is_admin: boolean
   created_at: string
   pattern_count: number
+  username: string | null
+  nickname: string | null
+  status: string | null
 }
 
 export interface AdminPattern {
@@ -35,7 +38,6 @@ export const useAdminStore = defineStore('admin', () => {
       if (profilesError || !profiles) return []
       if (patternsError) return []
 
-      // 按 user_id 分组统计图纸数
       const countMap = new Map<string, number>()
       for (const p of patterns ?? []) {
         if (p.user_id == null) continue
@@ -49,6 +51,9 @@ export const useAdminStore = defineStore('admin', () => {
         is_admin: !!profile.is_admin,
         created_at: profile.created_at,
         pattern_count: countMap.get(profile.user_id) ?? 0,
+        username: profile.username ?? null,
+        nickname: profile.nickname ?? null,
+        status: profile.status ?? 'active',
       }))
     } catch {
       return []
@@ -59,6 +64,56 @@ export const useAdminStore = defineStore('admin', () => {
     const { error } = await supabase
       .from('profiles')
       .update({ is_admin: isAdmin })
+      .eq('user_id', userId)
+    return { error }
+  }
+
+  /** 管理员新增用户 */
+  async function createUser(email: string, password: string, username?: string) {
+    const admin = getAdminClient()
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
+    if (error) return { data: null, error }
+
+    // 同步创建 profile
+    if (data.user) {
+      const { error: profileError } = await supabase.from('profiles').insert({
+        user_id: data.user.id,
+        email,
+        username: username || email.split('@')[0],
+        is_admin: false,
+      })
+      if (profileError) return { data: null, error: profileError }
+    }
+
+    return { data, error: null }
+  }
+
+  /** 管理员删除用户 */
+  async function deleteUser(userId: string) {
+    const admin = getAdminClient()
+    const { error } = await admin.auth.admin.deleteUser(userId)
+    if (error) return { error }
+
+    await supabase.from('profiles').delete().eq('user_id', userId)
+    return { error: null }
+  }
+
+  /** 管理员修改用户密码 */
+  async function updateUserPassword(userId: string, newPassword: string) {
+    const admin = getAdminClient()
+    const { error } = await admin.auth.admin.updateUserById(userId, { password: newPassword })
+    return { error }
+  }
+
+  /** 管理员修改用户状态 */
+  async function updateUserStatus(userId: string, status: string) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ status })
       .eq('user_id', userId)
     return { error }
   }
@@ -116,6 +171,10 @@ export const useAdminStore = defineStore('admin', () => {
   return {
     fetchAllProfiles,
     setAdmin,
+    createUser,
+    deleteUser,
+    updateUserPassword,
+    updateUserStatus,
     fetchAllPatterns,
     adminDeletePattern,
     adminTogglePatternPublic,
