@@ -26,33 +26,58 @@ npm run dev
 npm run build
 ```
 
-## 环境变量
+## Supabase 后端服务
 
-在 `.env` 文件中配置 Supabase：
+本项目使用 [Supabase](https://supabase.com) 作为后端，它是一个开源的 Firebase 替代品，提供以下核心服务：
+
+| 服务 | 用途 |
+|---|---|
+| **Auth** | 用户注册、登录、会话管理、密码重置 |
+| **Database** | 用户档案、图纸数据、点赞记录的存储 |
+| **Storage** | 图纸缩略图图片存储 |
+| **Row Level Security** | 数据访问权限控制 |
+
+### Supabase 项目创建步骤
+
+1. 打开 [supabase.com](https://supabase.com)，点击 **Start your project** 注册账号
+2. 进入 Dashboard → **New project**，填写项目名称和数据库密码
+3. 选择离你最近的服务器区域，点击 **Create new project**
+4. 等待项目创建完成（约 1-2 分钟）
+
+### 获取配置密钥
+
+在项目 Dashboard 中：
+
+| 密钥 | 位置 |
+|---|---|
+| `VITE_SUPABASE_URL` | **Project Settings → API → Project URL** |
+| `VITE_SUPABASE_ANON_KEY` | **Project Settings → API → anon public key** |
+| `VITE_SUPABASE_SERVICE_ROLE_KEY` | **Project Settings → API → service_role key** |
+
+### 环境变量
+
+在项目根目录创建 `.env` 文件（已加入 `.gitignore`，不会提交到仓库）：
 
 ```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_your_anon_key
-VITE_SUPABASE_SERVICE_ROLE_KEY=ssb_secret_your_service_role_key
+VITE_SUPABASE_URL=https://你的项目ID.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_你的匿名密钥
+VITE_SUPABASE_SERVICE_ROLE_KEY=ssb_secret_你的服务角色密钥
 ```
 
-## 技术栈
+> `service_role key` 拥有最高权限，仅用于管理后台的增删用户操作，请勿泄露。
 
-| 技术 | 用途 |
-|---|---|
-| Vue 3 + Composition API | 前端框架 |
-| Vite 8 | 构建工具 |
-| TypeScript 6 | 类型安全 |
-| Pinia | 状态管理 |
-| Vue Router (Hash) | 路由（兼容 GitHub Pages） |
-| Supabase | 后端即服务（认证、数据库、存储） |
+### 数据库初始化
 
-## 数据库
+在 Supabase Dashboard → **SQL Editor** 中，按顺序运行以下脚本：
 
-创建 Supabase 项目后，依次运行以下脚本：
+1. **`supabase-setup.sql`** — 创建 profiles、patterns、likes 表，配置 RLS 策略和存储桶
+2. **`supabase-migration.sql`** — 补充 username、status、grid_data 等字段
 
-1. `supabase-setup.sql` — 建表、RLS 策略、存储桶
-2. `supabase-migration.sql` — 字段补充（用户名、状态、网格数据）
+### 启用邮箱密码登录
+
+1. 进入 **Authentication → Providers**
+2. 找到 **Email**，确保 **Enabled** 已开启
+3. 在 **Confirm email** 设置中选择是否要求邮箱确认（开发阶段建议关闭）
 
 ### 主要表结构
 
